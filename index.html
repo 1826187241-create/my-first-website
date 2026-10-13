@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>我的第一个AI网站</title>
+  <title>个人工作管理 · My Workspace</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -23,7 +23,7 @@
       border-radius: 24px;
       box-shadow: 0 12px 35px #00000015;
       width: calc(100% - 40px);
-      max-width: 600px;
+      max-width: 900px;
       margin: 20px;
     }
     h1 { color: #6d28d9; }
@@ -69,6 +69,38 @@
     .delete-button { flex-shrink: 0; padding: 10px 12px; background: #ede9fe; color: #6d28d9; }
     .delete-button:hover { background: #ddd6fe; }
     .todo-hint { font-size: 14px; margin: 10px 0; overflow-wrap: anywhere; }
+    .subtitle { color: #777; }
+    .todo-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding: 20px; background: #faf9ff; border: 1px solid #ede9fe; border-radius: 16px; }
+    .field { display: flex; flex-direction: column; gap: 8px; min-width: 0; font-size: 14px; color: #594b70; }
+    .task-field { grid-column: 1 / -1; }
+    .todo-form button { grid-column: 1 / -1; }
+    select, input[type="date"] { width: 100%; min-width: 0; max-width: 100%; padding: 12px; border: 1px solid #c4b5fd; border-radius: 10px; font: inherit; font-size: 16px; background: white; color: #40344f; }
+    select:focus-visible, input[type="date"]:focus-visible { outline: 2px solid #7c3aed; outline-offset: 2px; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 20px 0 12px; }
+    .stat { padding: 16px 12px; border: 1px solid #ede9fe; border-radius: 14px; background: #faf9ff; text-align: center; }
+    .stat strong { display: block; font-size: 28px; color: #6d28d9; margin-bottom: 6px; }
+    .stat span { font-size: 13px; color: #655b75; }
+    progress { display: block; width: 100%; height: 10px; accent-color: #7c3aed; }
+    .filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 24px 0 12px; }
+    .task-content { flex: 1; min-width: 0; }
+    .task-meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0 34px; }
+    .badge { padding: 4px 8px; border-radius: 7px; font-size: 12px; color: #6d28d9; background: #ede9fe; overflow-wrap: anywhere; }
+    .priority-high { background: #ffe4e6; color: #a51c39; }
+    .priority-medium { background: #fef3c7; color: #855508; }
+    .priority-low { background: #dcfce7; color: #21613b; }
+    .overdue { background: #ffe4e6; color: #a51c39; }
+    .todo-item { background: white; padding: 16px; }
+    .done { background: #faf9ff; }
+    .todo-label { align-items: flex-start; }
+    .todo-label input { margin: 2px 0 0; }
+    @media (max-width: 640px) {
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .todo-form, .filters { grid-template-columns: 1fr; }
+      .todo-form { padding: 16px; }
+      .todo-item { flex-wrap: wrap; }
+      .task-content { flex-basis: 100%; }
+      .delete-button { margin-left: 34px; }
+    }
     @media (max-width: 480px) {
       .card { padding: 30px 20px; }
       h1 { font-size: 26px; }
@@ -80,19 +112,47 @@
 </head>
 <body>
   <div class="card">
-    <h1>✨ 我的第一个AI网站</h1>
+    <h1>✨ 个人工作管理</h1>
+    <p class="subtitle">My Workspace · 有条理地完成每一天</p>
     <p>你好！欢迎来到我的网站。</p>
     <p>这是我使用 ChatGPT 学习制作的第一个网页！</p>
     <button onclick="sayHello()">点击认识我</button>
     <p id="message" aria-live="polite"></p>
     <section class="todos" aria-labelledby="todo-title">
-      <h2 id="todo-title">我的待办清单</h2>
+      <h2 id="todo-title">我的待办清单 · My Tasks</h2>
+      <div class="stats" aria-label="全部任务统计">
+        <div class="stat"><strong id="stat-total">0</strong><span>总任务数 · Total</span></div>
+        <div class="stat"><strong id="stat-done">0</strong><span>已完成 · Completed</span></div>
+        <div class="stat"><strong id="stat-pending">0</strong><span>未完成 · Pending</span></div>
+        <div class="stat"><strong id="stat-rate">0%</strong><span>完成率 · Progress</span></div>
+      </div>
+      <progress id="task-progress" max="100" value="0" aria-label="全部任务完成率"></progress>
+      <p class="todo-hint">统计包含全部任务，不受下方筛选影响。</p>
       <form id="todo-form" class="todo-form">
-        <label for="todo-input" hidden>待办事项</label>
-        <input id="todo-input" class="todo-input" type="text" placeholder="输入一件想完成的事…" maxlength="500" required aria-label="待办事项">
-        <button type="submit">添加</button>
+        <label class="field task-field" for="todo-input">任务 · Task
+          <input id="todo-input" class="todo-input" type="text" placeholder="输入一件想完成的事…" maxlength="500" required>
+        </label>
+        <label class="field" for="task-category">分类 · Category
+          <select id="task-category"><option value="work">工作 · Work</option><option value="study">学习 · Study</option><option value="life">生活 · Life</option></select>
+        </label>
+        <label class="field" for="task-priority">优先级 · Priority
+          <select id="task-priority"><option value="high">高 · High</option><option value="medium" selected>中 · Medium</option><option value="low">低 · Low</option></select>
+        </label>
+        <label class="field" for="task-date">截止日期 · Due Date
+          <input id="task-date" type="date">
+        </label>
+        <button type="submit">添加任务 · Add Task</button>
       </form>
       <p id="todo-status" class="todo-hint" role="status"></p>
+      <div class="filters">
+        <label class="field" for="filter-category">按分类筛选 · Category Filter
+          <select id="filter-category"><option value="all">全部分类 · All</option><option value="work">工作 · Work</option><option value="study">学习 · Study</option><option value="life">生活 · Life</option></select>
+        </label>
+        <label class="field" for="filter-status">按完成状态筛选 · Status Filter
+          <select id="filter-status"><option value="all">全部状态 · All</option><option value="pending">未完成 · Pending</option><option value="done">已完成 · Completed</option></select>
+        </label>
+      </div>
+      <p id="filter-count" class="todo-hint" aria-live="polite"></p>
       <ul id="todo-list" class="todo-list" aria-label="待办事项列表"></ul>
       <p id="empty-state" class="todo-hint">清单还是空的，添加你的第一件待办吧！</p>
       <p class="todo-hint">事项自动保存在当前浏览器中，下次打开还能继续使用。</p>
@@ -107,15 +167,38 @@
     const todoList = document.getElementById("todo-list");
     const todoInput = document.getElementById("todo-input");
     const todoStatus = document.getElementById("todo-status");
+    const categoryNames = { work: "工作 · Work", study: "学习 · Study", life: "生活 · Life" };
+    const priorityNames = { high: "高 · High", medium: "中 · Medium", low: "低 · Low" };
+    const filterCategory = document.getElementById("filter-category");
+    const filterStatus = document.getElementById("filter-status");
+    function validDate(value) {
+      if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+      const date = new Date(value + "T00:00:00Z");
+      return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+    }
     let todos = [];
+    let storageReadable = true;
     try {
-      const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      const raw = localStorage.getItem(storageKey);
+      const saved = raw === null ? [] : JSON.parse(raw);
       if (!Array.isArray(saved)) throw new Error("Invalid saved list");
-      todos = saved.filter(item => item && typeof item.text === "string" && typeof item.done === "boolean");
+      if (saved.some(item => !item || typeof item.text !== "string" || typeof item.done !== "boolean")) throw new Error("Invalid saved task");
+      // Keep the existing storage key and supply defaults for older tasks.
+      todos = saved.map(item => ({
+        ...item,
+        category: Object.hasOwn(categoryNames, item.category) ? item.category : "work",
+        priority: Object.hasOwn(priorityNames, item.priority) ? item.priority : "medium",
+        dueDate: validDate(item.dueDate) ? item.dueDate : ""
+      }));
     } catch (error) {
-      todoStatus.textContent = "暂时无法读取之前的清单，请确认浏览器允许本地存储。";
+      storageReadable = false;
+      todoStatus.textContent = "无法读取原清单。为保护旧数据，本次更改不会写入存储；请保留浏览器数据并检查存储设置。";
     }
     function saveTodos() {
+      if (!storageReadable) {
+        todoStatus.textContent = "本次更改尚未保存：原清单读取失败，已避免覆盖旧数据。";
+        return;
+      }
       try {
         localStorage.setItem(storageKey, JSON.stringify(todos));
         todoStatus.textContent = "清单已保存。";
@@ -125,10 +208,25 @@
     }
     function renderTodos() {
       todoList.replaceChildren();
-      document.getElementById("empty-state").hidden = todos.length > 0;
+      const completed = todos.filter(todo => todo.done).length;
+      const rate = todos.length ? Math.round(completed / todos.length * 100) : 0;
+      document.getElementById("stat-total").textContent = todos.length;
+      document.getElementById("stat-done").textContent = completed;
+      document.getElementById("stat-pending").textContent = todos.length - completed;
+      document.getElementById("stat-rate").textContent = rate + "%";
+      document.getElementById("task-progress").value = rate;
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      let visibleCount = 0;
       todos.forEach((todo, index) => {
+        if (filterCategory.value !== "all" && todo.category !== filterCategory.value) return;
+        if (filterStatus.value === "done" && !todo.done) return;
+        if (filterStatus.value === "pending" && todo.done) return;
+        visibleCount++;
         const item = document.createElement("li");
         item.className = "todo-item" + (todo.done ? " done" : "");
+        const content = document.createElement("div");
+        content.className = "task-content";
         const label = document.createElement("label");
         label.className = "todo-label";
         const checkbox = document.createElement("input");
@@ -141,11 +239,29 @@
           todo.done = checkbox.checked;
           item.classList.toggle("done", todo.done);
           saveTodos();
+          renderTodos();
+          const nextCheckbox = todoList.querySelector(`[data-task-index="${index}"]`);
+          if (nextCheckbox) nextCheckbox.focus();
+          else filterStatus.focus();
         });
+        checkbox.setAttribute("data-task-index", index);
+        const meta = document.createElement("div");
+        meta.className = "task-meta";
+        const category = document.createElement("span");
+        category.className = "badge";
+        category.textContent = categoryNames[todo.category];
+        const priority = document.createElement("span");
+        priority.className = "badge priority-" + todo.priority;
+        priority.textContent = "优先级 Priority：" + priorityNames[todo.priority];
+        const due = document.createElement("span");
+        const overdue = !todo.done && todo.dueDate && todo.dueDate < today;
+        due.className = "badge" + (overdue ? " overdue" : "");
+        due.textContent = todo.dueDate ? "截止 Due：" + todo.dueDate + (overdue ? " · 已逾期 Overdue" : "") : "无截止日期 · No Due Date";
+        meta.append(category, priority, due);
         const deleteButton = document.createElement("button");
         deleteButton.type = "button";
         deleteButton.className = "delete-button";
-        deleteButton.textContent = "删除";
+        deleteButton.textContent = "删除 Delete";
         deleteButton.setAttribute("aria-label", "删除事项：" + todo.text);
         deleteButton.addEventListener("click", () => {
           todos.splice(index, 1);
@@ -154,9 +270,14 @@
           todoInput.focus();
         });
         label.append(checkbox, text);
-        item.append(label, deleteButton);
+        content.append(label, meta);
+        item.append(content, deleteButton);
         todoList.append(item);
       });
+      document.getElementById("filter-count").textContent = `显示 ${visibleCount} / ${todos.length} 项 · Tasks shown`;
+      const emptyState = document.getElementById("empty-state");
+      emptyState.hidden = visibleCount > 0;
+      emptyState.textContent = todos.length ? "当前筛选下没有任务，试试其他分类或状态。" : "清单还是空的，添加你的第一件待办吧！";
     }
     document.getElementById("todo-form").addEventListener("submit", event => {
       event.preventDefault();
@@ -166,12 +287,26 @@
         todoInput.focus();
         return;
       }
-      todos.push({ text, done: false });
+      const dueDate = document.getElementById("task-date").value;
+      if (dueDate && !validDate(dueDate)) {
+        todoStatus.textContent = "请选择有效的截止日期。";
+        return;
+      }
+      todos.push({ text, done: false,
+        category: document.getElementById("task-category").value,
+        priority: document.getElementById("task-priority").value,
+        dueDate
+      });
+      filterCategory.value = "all";
+      filterStatus.value = "all";
       saveTodos();
       renderTodos();
       todoInput.value = "";
+      document.getElementById("task-date").value = "";
       todoInput.focus();
     });
+    filterCategory.addEventListener("change", renderTodos);
+    filterStatus.addEventListener("change", renderTodos);
     renderTodos();
     function sayHello() {
       document.getElementById("message").textContent =
