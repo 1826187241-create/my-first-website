@@ -23,7 +23,7 @@
       border-radius: 24px;
       box-shadow: 0 12px 35px #00000015;
       width: calc(100% - 40px);
-      max-width: 480px;
+      max-width: 600px;
       margin: 20px;
     }
     h1 { color: #6d28d9; }
@@ -48,10 +48,33 @@
     }
     button:hover { background: #6d28d9; }
     button:focus-visible { outline: 3px solid #c4b5fd; outline-offset: 4px; }
+    .todos { margin-top: 28px; text-align: left; }
+    .todo-form { display: flex; gap: 10px; margin-top: 8px; }
+    .todo-input {
+      flex: 1; min-width: 0; width: 100%; padding: 14px;
+      border: 1px solid #c4b5fd; border-radius: 12px;
+      font: inherit; font-size: 16px; background: #faf9ff;
+    }
+    .todo-input:focus { outline: 2px solid #7c3aed; outline-offset: 2px; }
+    .todo-list { list-style: none; padding: 0; margin: 16px 0; }
+    .todo-item {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+      padding: 12px; border: 1px solid #ede9fe; border-radius: 12px;
+      background: #f5f3ff;
+    }
+    .todo-label { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; cursor: pointer; }
+    .todo-label input { flex-shrink: 0; width: 22px; height: 22px; accent-color: #7c3aed; }
+    .todo-text { min-width: 0; overflow-wrap: anywhere; line-height: 1.6; }
+    .done .todo-text { text-decoration: line-through; color: #777; }
+    .delete-button { flex-shrink: 0; padding: 10px 12px; background: #ede9fe; color: #6d28d9; }
+    .delete-button:hover { background: #ddd6fe; }
+    .todo-hint { font-size: 14px; margin: 10px 0; overflow-wrap: anywhere; }
     @media (max-width: 480px) {
       .card { padding: 30px 20px; }
       h1 { font-size: 26px; }
       .about { padding: 20px 16px; }
+      .todo-form { flex-direction: column; }
+      .todo-form button { width: 100%; }
     }
   </style>
 </head>
@@ -62,12 +85,94 @@
     <p>这是我使用 ChatGPT 学习制作的第一个网页！</p>
     <button onclick="sayHello()">点击认识我</button>
     <p id="message" aria-live="polite"></p>
+    <section class="todos" aria-labelledby="todo-title">
+      <h2 id="todo-title">我的待办清单</h2>
+      <form id="todo-form" class="todo-form">
+        <label for="todo-input" hidden>待办事项</label>
+        <input id="todo-input" class="todo-input" type="text" placeholder="输入一件想完成的事…" maxlength="500" required aria-label="待办事项">
+        <button type="submit">添加</button>
+      </form>
+      <p id="todo-status" class="todo-hint" role="status"></p>
+      <ul id="todo-list" class="todo-list" aria-label="待办事项列表"></ul>
+      <p id="empty-state" class="todo-hint">清单还是空的，添加你的第一件待办吧！</p>
+      <p class="todo-hint">事项自动保存在当前浏览器中，下次打开还能继续使用。</p>
+    </section>
     <section class="about" aria-labelledby="about-title">
       <h2 id="about-title">关于我</h2>
       <p>你好！我正在学习使用ai制作网站，希望未来能独立开发属于自己的ai应用</p>
     </section>
   </div>
   <script>
+    const storageKey = "my-first-website-todos-v1";
+    const todoList = document.getElementById("todo-list");
+    const todoInput = document.getElementById("todo-input");
+    const todoStatus = document.getElementById("todo-status");
+    let todos = [];
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
+      if (!Array.isArray(saved)) throw new Error("Invalid saved list");
+      todos = saved.filter(item => item && typeof item.text === "string" && typeof item.done === "boolean");
+    } catch (error) {
+      todoStatus.textContent = "暂时无法读取之前的清单，请确认浏览器允许本地存储。";
+    }
+    function saveTodos() {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(todos));
+        todoStatus.textContent = "清单已保存。";
+      } catch (error) {
+        todoStatus.textContent = "保存失败：本次仍可使用，但关闭后可能丢失，请检查浏览器存储设置。";
+      }
+    }
+    function renderTodos() {
+      todoList.replaceChildren();
+      document.getElementById("empty-state").hidden = todos.length > 0;
+      todos.forEach((todo, index) => {
+        const item = document.createElement("li");
+        item.className = "todo-item" + (todo.done ? " done" : "");
+        const label = document.createElement("label");
+        label.className = "todo-label";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = todo.done;
+        const text = document.createElement("span");
+        text.className = "todo-text";
+        text.textContent = todo.text;
+        checkbox.addEventListener("change", () => {
+          todo.done = checkbox.checked;
+          item.classList.toggle("done", todo.done);
+          saveTodos();
+        });
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "delete-button";
+        deleteButton.textContent = "删除";
+        deleteButton.setAttribute("aria-label", "删除事项：" + todo.text);
+        deleteButton.addEventListener("click", () => {
+          todos.splice(index, 1);
+          saveTodos();
+          renderTodos();
+          todoInput.focus();
+        });
+        label.append(checkbox, text);
+        item.append(label, deleteButton);
+        todoList.append(item);
+      });
+    }
+    document.getElementById("todo-form").addEventListener("submit", event => {
+      event.preventDefault();
+      const text = todoInput.value.trim();
+      if (!text) {
+        todoStatus.textContent = "请先输入待办事项。";
+        todoInput.focus();
+        return;
+      }
+      todos.push({ text, done: false });
+      saveTodos();
+      renderTodos();
+      todoInput.value = "";
+      todoInput.focus();
+    });
+    renderTodos();
     function sayHello() {
       document.getElementById("message").textContent =
         "🎉 恭喜！你已经成功运行了第一个网页！";
