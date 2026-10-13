@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>我的第一个AI网站</title>
   <style>
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       font-family: "Microsoft YaHei", sans-serif;
@@ -21,11 +22,21 @@
       padding: 45px 30px;
       border-radius: 24px;
       box-shadow: 0 12px 35px #00000015;
-      max-width: 420px;
+      width: calc(100% - 40px);
+      max-width: 480px;
       margin: 20px;
     }
     h1 { color: #6d28d9; }
+    h2 { color: #6d28d9; font-size: 22px; margin: 0 0 12px; }
     p { color: #555; line-height: 1.8; }
+    .about {
+      margin-top: 28px;
+      padding: 24px 20px;
+      background: #f5f3ff;
+      border-radius: 16px;
+      border: 1px solid #ede9fe;
+    }
+    .about p { margin: 0; }
     button {
       background: #7c3aed;
       color: white;
@@ -35,15 +46,26 @@
       cursor: pointer;
       font-size: 16px;
     }
+    button:hover { background: #6d28d9; }
+    button:focus-visible { outline: 3px solid #c4b5fd; outline-offset: 4px; }
+    @media (max-width: 480px) {
+      .card { padding: 30px 20px; }
+      h1 { font-size: 26px; }
+      .about { padding: 20px 16px; }
+    }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>✨ 我的第一个AI网站</h1>
-    <p>你好！欢迎来到我的网站。</p >
-    <p>这是我使用 ChatGPT 学习制作的第一个网页！</p >
+    <p>你好！欢迎来到我的网站。</p>
+    <p>这是我使用 ChatGPT 学习制作的第一个网页！</p>
     <button onclick="sayHello()">点击认识我</button>
-    <p id="message"></p >
+    <p id="message" aria-live="polite"></p>
+    <section class="about" aria-labelledby="about-title">
+      <h2 id="about-title">关于我</h2>
+      <p>你好！我正在学习使用ai制作网站，希望未来能独立开发属于自己的ai应用</p>
+    </section>
   </div>
   <script>
     function sayHello() {
