@@ -81,7 +81,7 @@
     .stat strong { display: block; font-size: 28px; color: #6d28d9; margin-bottom: 6px; }
     .stat span { font-size: 13px; color: #655b75; }
     progress { display: block; width: 100%; height: 10px; accent-color: #7c3aed; }
-    .filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 24px 0 12px; }
+    .filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 24px 0 12px; }
     .task-content { flex: 1; min-width: 0; }
     .task-meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0 34px; }
     .badge { padding: 4px 8px; border-radius: 7px; font-size: 12px; color: #6d28d9; background: #ede9fe; overflow-wrap: anywhere; }
@@ -93,13 +93,23 @@
     .done { background: #faf9ff; }
     .todo-label { align-items: flex-start; }
     .todo-label input { margin: 2px 0 0; }
+    .task-actions { display: flex; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+    .edit-button { padding: 10px 12px; }
+    .edit-dialog { width: calc(100% - 32px); max-width: 600px; max-height: calc(100dvh - 32px); overflow-y: auto; padding: 24px; border: 1px solid #ede9fe; border-radius: 20px; color: #40344f; box-shadow: 0 20px 60px #26144333; }
+    .edit-dialog::backdrop { background: #26144366; }
+    .edit-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .edit-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; }
+    .edit-actions button { flex: 1; }
+    .edit-error { grid-column: 1 / -1; color: #a51c39; margin: 0; }
     @media (max-width: 640px) {
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .todo-form, .filters { grid-template-columns: 1fr; }
       .todo-form { padding: 16px; }
       .todo-item { flex-wrap: wrap; }
       .task-content { flex-basis: 100%; }
-      .delete-button { margin-left: 34px; }
+      .task-actions { margin-left: 34px; }
+      .edit-form { grid-template-columns: 1fr; }
+      .edit-dialog { padding: 20px; }
     }
     @media (max-width: 480px) {
       .card { padding: 30px 20px; }
@@ -151,6 +161,13 @@
         <label class="field" for="filter-status">按完成状态筛选 · Status Filter
           <select id="filter-status"><option value="all">全部状态 · All</option><option value="pending">未完成 · Pending</option><option value="done">已完成 · Completed</option></select>
         </label>
+        <label class="field" for="sort-order">排序方式 · Sort By
+          <select id="sort-order">
+            <option value="default">默认排序 · Default</option>
+            <option value="priority">优先级排序 · Priority</option>
+            <option value="due-date">截止日期排序 · Due Date</option>
+          </select>
+        </label>
       </div>
       <p id="filter-count" class="todo-hint" aria-live="polite"></p>
       <ul id="todo-list" class="todo-list" aria-label="待办事项列表"></ul>
@@ -162,6 +179,29 @@
       <p>你好！我正在学习使用ai制作网站，希望未来能独立开发属于自己的ai应用</p>
     </section>
   </div>
+  <dialog id="edit-dialog" class="edit-dialog" aria-labelledby="edit-title" aria-describedby="edit-description">
+    <h2 id="edit-title">编辑任务 · Edit Task</h2>
+    <p id="edit-description" class="todo-hint">修改任务信息，完成状态保持不变。 · Completion status stays unchanged.</p>
+    <form id="edit-form" class="edit-form">
+      <label class="field task-field" for="edit-text">任务名称 · Task Name
+        <input id="edit-text" class="todo-input" type="text" maxlength="500" required autofocus>
+      </label>
+      <label class="field" for="edit-category">分类 · Category
+        <select id="edit-category"><option value="work">工作 · Work</option><option value="study">学习 · Study</option><option value="life">生活 · Life</option></select>
+      </label>
+      <label class="field" for="edit-priority">优先级 · Priority
+        <select id="edit-priority"><option value="high">高 · High</option><option value="medium">中 · Medium</option><option value="low">低 · Low</option></select>
+      </label>
+      <label class="field" for="edit-date">截止日期 · Due Date
+        <input id="edit-date" type="date">
+      </label>
+      <p id="edit-error" class="edit-error todo-hint" role="alert"></p>
+      <div class="edit-actions">
+        <button type="submit">保存 · Save</button>
+        <button id="edit-cancel" class="delete-button" type="button">取消 · Cancel</button>
+      </div>
+    </form>
+  </dialog>
   <script>
     const storageKey = "my-first-website-todos-v1";
     const todoList = document.getElementById("todo-list");
@@ -171,6 +211,54 @@
     const priorityNames = { high: "高 · High", medium: "中 · Medium", low: "低 · Low" };
     const filterCategory = document.getElementById("filter-category");
     const filterStatus = document.getElementById("filter-status");
+    const sortOrder = document.getElementById("sort-order");
+    const editDialog = document.getElementById("edit-dialog");
+    const editText = document.getElementById("edit-text");
+    const editCategory = document.getElementById("edit-category");
+    const editPriority = document.getElementById("edit-priority");
+    const editDate = document.getElementById("edit-date");
+    const editError = document.getElementById("edit-error");
+    let editingTodo = null;
+    function openEditor(todo) {
+      editingTodo = todo;
+      editText.value = todo.text;
+      editCategory.value = todo.category;
+      editPriority.value = todo.priority;
+      editDate.value = todo.dueDate;
+      editError.textContent = "";
+      editDialog.showModal();
+      editText.focus();
+    }
+    document.getElementById("edit-cancel").addEventListener("click", () => editDialog.close());
+    editDialog.addEventListener("close", () => { editingTodo = null; });
+    document.getElementById("edit-form").addEventListener("submit", event => {
+      event.preventDefault();
+      if (!editingTodo || !todos.includes(editingTodo)) return;
+      const text = editText.value.trim();
+      if (!text) {
+        editError.textContent = "请输入任务名称。 · Please enter a task name.";
+        editText.focus();
+        return;
+      }
+      if (editDate.value && !validDate(editDate.value)) {
+        editError.textContent = "请选择有效日期。 · Please choose a valid date.";
+        return;
+      }
+      const original = { ...editingTodo };
+      // Change only editable fields; preserve done and all other stored fields.
+      Object.assign(editingTodo, { text, category: editCategory.value, priority: editPriority.value, dueDate: editDate.value });
+      if (!saveTodos()) {
+        Object.assign(editingTodo, original);
+        editError.textContent = "保存失败，修改尚未生效，请重试或取消。 · Save failed. Retry or cancel.";
+        return;
+      }
+      const editedIndex = todos.indexOf(editingTodo);
+      editDialog.close();
+      renderTodos();
+      const editButton = todoList.querySelector(`[data-edit-index="${editedIndex}"]`);
+      if (editButton) editButton.focus();
+      else filterCategory.focus();
+    });
     function validDate(value) {
       if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
       const date = new Date(value + "T00:00:00Z");
@@ -197,13 +285,15 @@
     function saveTodos() {
       if (!storageReadable) {
         todoStatus.textContent = "本次更改尚未保存：原清单读取失败，已避免覆盖旧数据。";
-        return;
+        return false;
       }
       try {
         localStorage.setItem(storageKey, JSON.stringify(todos));
         todoStatus.textContent = "清单已保存。";
+        return true;
       } catch (error) {
         todoStatus.textContent = "保存失败：本次仍可使用，但关闭后可能丢失，请检查浏览器存储设置。";
+        return false;
       }
     }
     function renderTodos() {
@@ -218,7 +308,28 @@
       const now = new Date();
       const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       let visibleCount = 0;
-      todos.forEach((todo, index) => {
+      // Sort a separate display list, retaining each task's original index.
+      // This leaves stored order intact and keeps edit/delete targeting correct.
+      const displayTasks = todos.map((todo, index) => ({ todo, index }));
+      if (sortOrder.value !== "default") {
+        const priorityRank = { high: 0, medium: 1, low: 2 };
+        displayTasks.sort((a, b) => {
+          const completionOrder = Number(a.todo.done) - Number(b.todo.done);
+          if (completionOrder) return completionOrder;
+          if (sortOrder.value === "priority") {
+            return priorityRank[a.todo.priority] - priorityRank[b.todo.priority] || a.index - b.index;
+          }
+          if (sortOrder.value === "due-date") {
+            const aDate = a.todo.dueDate;
+            const bDate = b.todo.dueDate;
+            if (!aDate && bDate) return 1;
+            if (aDate && !bDate) return -1;
+            if (aDate !== bDate) return aDate < bDate ? -1 : 1;
+          }
+          return a.index - b.index;
+        });
+      }
+      displayTasks.forEach(({ todo, index }) => {
         if (filterCategory.value !== "all" && todo.category !== filterCategory.value) return;
         if (filterStatus.value === "done" && !todo.done) return;
         if (filterStatus.value === "pending" && todo.done) return;
@@ -271,7 +382,17 @@
         });
         label.append(checkbox, text);
         content.append(label, meta);
-        item.append(content, deleteButton);
+        const actions = document.createElement("div");
+        actions.className = "task-actions";
+        const editButton = document.createElement("button");
+        editButton.type = "button";
+        editButton.className = "edit-button";
+        editButton.textContent = "编辑 · Edit";
+        editButton.setAttribute("aria-label", "编辑任务 · Edit task：" + todo.text);
+        editButton.setAttribute("data-edit-index", index);
+        editButton.addEventListener("click", () => openEditor(todo));
+        actions.append(editButton, deleteButton);
+        item.append(content, actions);
         todoList.append(item);
       });
       document.getElementById("filter-count").textContent = `显示 ${visibleCount} / ${todos.length} 项 · Tasks shown`;
@@ -307,6 +428,7 @@
     });
     filterCategory.addEventListener("change", renderTodos);
     filterStatus.addEventListener("change", renderTodos);
+    sortOrder.addEventListener("change", renderTodos);
     renderTodos();
     function sayHello() {
       document.getElementById("message").textContent =
