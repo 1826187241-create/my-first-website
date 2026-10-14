@@ -101,6 +101,11 @@
     .edit-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; }
     .edit-actions button { flex: 1; }
     .edit-error { grid-column: 1 / -1; color: #a51c39; margin: 0; }
+    .today-section { margin-top: 28px; padding: 20px; text-align: left; background: #faf9ff; border: 1px solid #ede9fe; border-radius: 16px; }
+    .today-section .todo-list { margin-bottom: 0; }
+    .today-overdue { border-left: 4px solid #c99350; background: #fffcf7; }
+    .today-overdue .overdue { background: #f9ecd9; color: #855508; }
+    #today-count { color: #6d28d9; font-weight: 600; }
     @media (max-width: 640px) {
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .todo-form, .filters { grid-template-columns: 1fr; }
@@ -110,6 +115,7 @@
       .task-actions { margin-left: 34px; }
       .edit-form { grid-template-columns: 1fr; }
       .edit-dialog { padding: 20px; }
+      .today-section { padding: 16px; }
     }
     @media (max-width: 480px) {
       .card { padding: 30px 20px; }
@@ -128,6 +134,14 @@
     <p>这是我使用 ChatGPT 学习制作的第一个网页！</p>
     <button onclick="sayHello()">点击认识我</button>
     <p id="message" aria-live="polite"></p>
+    <section class="today-section" aria-labelledby="today-title">
+      <h2 id="today-title">今日任务 · Today’s Tasks</h2>
+      <p class="todo-hint">今天 · Today：<time id="today-date"></time></p>
+      <p id="today-count" class="todo-hint" aria-live="polite" tabindex="-1"></p>
+      <p class="todo-hint">今天到期和已逾期的未完成任务，按优先级排列。 · Pending tasks due today or overdue, ordered by priority.</p>
+      <ul id="today-list" class="todo-list" aria-label="今日待处理任务 · Tasks to handle today"></ul>
+      <p id="today-empty" class="todo-hint">今天没有待处理任务 · No tasks to handle today.</p>
+    </section>
     <section class="todos" aria-labelledby="todo-title">
       <h2 id="todo-title">我的待办清单 · My Tasks</h2>
       <div class="stats" aria-label="全部任务统计">
@@ -212,6 +226,67 @@
     const filterCategory = document.getElementById("filter-category");
     const filterStatus = document.getElementById("filter-status");
     const sortOrder = document.getElementById("sort-order");
+    const todayList = document.getElementById("today-list");
+    let displayedDate = "";
+    function localDateKey() {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    }
+    function renderToday(today) {
+      displayedDate = today;
+      const dateLabel = document.getElementById("today-date");
+      dateLabel.textContent = today;
+      dateLabel.setAttribute("datetime", today);
+      todayList.replaceChildren();
+      const priorityRank = { high: 0, medium: 1, low: 2 };
+      // These entries reference the existing tasks; no tasks are cloned or added.
+      const todayTasks = todos.map((todo, index) => ({ todo, index }))
+        .filter(({ todo }) => !todo.done && todo.dueDate && todo.dueDate <= today)
+        .sort((a, b) => priorityRank[a.todo.priority] - priorityRank[b.todo.priority] || a.index - b.index);
+      document.getElementById("today-count").textContent = `今日待处理 · Pending Today：${todayTasks.length}`;
+      document.getElementById("today-empty").hidden = todayTasks.length > 0;
+      todayTasks.forEach(({ todo, index }) => {
+        const overdue = todo.dueDate < today;
+        const item = document.createElement("li");
+        item.className = "todo-item" + (overdue ? " today-overdue" : "");
+        const content = document.createElement("div");
+        content.className = "task-content";
+        const label = document.createElement("label");
+        label.className = "todo-label";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = todo.done;
+        checkbox.setAttribute("data-today-index", index);
+        const text = document.createElement("span");
+        text.className = "todo-text";
+        text.textContent = todo.text;
+        checkbox.addEventListener("change", () => {
+          const previous = todo.done;
+          todo.done = checkbox.checked;
+          if (!saveTodos()) todo.done = previous;
+          renderTodos();
+          const nextCheckbox = todayList.querySelector("input");
+          if (nextCheckbox) nextCheckbox.focus();
+          else document.getElementById("today-count").focus();
+        });
+        const meta = document.createElement("div");
+        meta.className = "task-meta";
+        const category = document.createElement("span");
+        category.className = "badge";
+        category.textContent = categoryNames[todo.category];
+        const priority = document.createElement("span");
+        priority.className = "badge priority-" + todo.priority;
+        priority.textContent = "优先级 Priority：" + priorityNames[todo.priority];
+        const due = document.createElement("span");
+        due.className = "badge" + (overdue ? " overdue" : "");
+        due.textContent = (overdue ? "已逾期 · Overdue：" : "今天到期 · Due Today：") + todo.dueDate;
+        label.append(checkbox, text);
+        meta.append(category, priority, due);
+        content.append(label, meta);
+        item.append(content);
+        todayList.append(item);
+      });
+    }
     const editDialog = document.getElementById("edit-dialog");
     const editText = document.getElementById("edit-text");
     const editCategory = document.getElementById("edit-category");
@@ -305,8 +380,8 @@
       document.getElementById("stat-pending").textContent = todos.length - completed;
       document.getElementById("stat-rate").textContent = rate + "%";
       document.getElementById("task-progress").value = rate;
-      const now = new Date();
-      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const today = localDateKey();
+      renderToday(today);
       let visibleCount = 0;
       // Sort a separate display list, retaining each task's original index.
       // This leaves stored order intact and keeps edit/delete targeting correct.
@@ -430,6 +505,15 @@
     filterStatus.addEventListener("change", renderTodos);
     sortOrder.addEventListener("change", renderTodos);
     renderTodos();
+    function refreshDateIfChanged() {
+      if (localDateKey() !== displayedDate) renderTodos();
+    }
+    // Update when the page stays open overnight or returns from the background.
+    setInterval(refreshDateIfChanged, 30000);
+    window.addEventListener("focus", refreshDateIfChanged);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) refreshDateIfChanged();
+    });
     function sayHello() {
       document.getElementById("message").textContent =
         "🎉 恭喜！你已经成功运行了第一个网页！";
