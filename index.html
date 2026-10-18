@@ -106,6 +106,17 @@
     .today-overdue { border-left: 4px solid #c99350; background: #fffcf7; }
     .today-overdue .overdue { background: #f9ecd9; color: #855508; }
     #today-count { color: #6d28d9; font-weight: 600; }
+    [hidden] { display: none !important; }
+    .goals-section, .goal-detail { margin-top: 28px; text-align: left; }
+    .goal-form { display: grid; gap: 16px; padding: 20px; border: 1px solid #ede9fe; border-radius: 16px; background: #faf9ff; }
+    textarea.todo-input { resize: vertical; min-height: 110px; line-height: 1.7; }
+    .goal-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
+    .goal-card { min-width: 0; padding: 20px; border: 1px solid #ede9fe; border-radius: 16px; background: #faf9ff; }
+    .goal-card h3 { color: #6d28d9; margin: 0 0 12px; font-size: 20px; overflow-wrap: anywhere; }
+    .goal-card button { width: 100%; margin-top: 18px; }
+    .goal-detail h2, .goal-detail p { overflow-wrap: anywhere; }
+    .goal-description { white-space: pre-wrap; }
+    .subtasks-placeholder { margin-top: 24px; padding: 20px; border: 1px dashed #c4b5fd; border-radius: 16px; background: #faf9ff; }
     @media (max-width: 640px) {
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .todo-form, .filters { grid-template-columns: 1fr; }
@@ -116,6 +127,8 @@
       .edit-form { grid-template-columns: 1fr; }
       .edit-dialog { padding: 20px; }
       .today-section { padding: 16px; }
+      .goal-grid { grid-template-columns: 1fr; }
+      .goal-form, .goal-card { padding: 16px; }
     }
     @media (max-width: 480px) {
       .card { padding: 30px 20px; }
@@ -128,6 +141,7 @@
 </head>
 <body>
   <div class="card">
+    <div id="home-view">
     <h1>✨ 个人工作管理</h1>
     <p class="subtitle">My Workspace · 有条理地完成每一天</p>
     <p>你好！欢迎来到我的网站。</p>
@@ -188,9 +202,43 @@
       <p id="empty-state" class="todo-hint">清单还是空的，添加你的第一件待办吧！</p>
       <p class="todo-hint">事项自动保存在当前浏览器中，下次打开还能继续使用。</p>
     </section>
+    <section class="goals-section" aria-labelledby="goals-title">
+      <h2 id="goals-title">我的目标 · My Goals</h2>
+      <form id="goal-form" class="goal-form">
+        <label class="field" for="goal-name">目标名称 · Goal Name
+          <input id="goal-name" class="todo-input" type="text" maxlength="200" required placeholder="你想实现什么？ · What do you want to achieve?">
+        </label>
+        <label class="field" for="goal-description">目标描述 · Description
+          <textarea id="goal-description" class="todo-input" maxlength="3000" placeholder="写下你的目标说明 · Describe your goal"></textarea>
+        </label>
+        <label class="field" for="goal-date">截止日期 · Due Date
+          <input id="goal-date" type="date">
+        </label>
+        <button type="submit">创建目标 · Create Goal</button>
+      </form>
+      <p id="goal-status" class="todo-hint" role="status"></p>
+      <p class="todo-hint">第一阶段：进度暂为 0%，后续加入子任务后再计算。 · Phase 1: progress starts at 0%; subtasks will be added later.</p>
+      <div id="goal-list" class="goal-grid"></div>
+      <p id="goals-empty" class="todo-hint">还没有目标，创建你的第一个目标吧！ · No goals yet. Create your first goal!</p>
+    </section>
     <section class="about" aria-labelledby="about-title">
       <h2 id="about-title">关于我</h2>
       <p>你好！我正在学习使用ai制作网站，希望未来能独立开发属于自己的ai应用</p>
+    </section>
+    </div>
+    <section id="goal-detail-view" class="goal-detail" aria-labelledby="goal-detail-title" hidden>
+      <button id="goal-back" class="delete-button" type="button">返回首页 · Back to Home</button>
+      <p class="todo-hint">目标详情 · Goal Details</p>
+      <h2 id="goal-detail-title" tabindex="-1"></h2>
+      <p id="goal-detail-date"></p>
+      <h3>目标描述 · Description</h3>
+      <p id="goal-detail-description" class="goal-description"></p>
+      <p>完成进度 · Progress：0%</p>
+      <progress max="100" value="0" aria-label="目标完成进度 · Goal progress"></progress>
+      <section class="subtasks-placeholder" aria-labelledby="subtasks-title">
+        <h3 id="subtasks-title">子任务 · Subtasks</h3>
+        <p>此处预留子任务区域，后续版本开放。 · Subtasks will be available in a future update.</p>
+      </section>
     </section>
   </div>
   <dialog id="edit-dialog" class="edit-dialog" aria-labelledby="edit-title" aria-describedby="edit-description">
@@ -518,6 +566,107 @@
       document.getElementById("message").textContent =
         "🎉 恭喜！你已经成功运行了第一个网页！";
     }
+  </script>
+  <script>
+    // Goal data is stored independently; never write to the ordinary task key.
+    const goalStorageKey = "my-first-website-goals-v1";
+    const goalStatus = document.getElementById("goal-status");
+    const goalList = document.getElementById("goal-list");
+    const goalName = document.getElementById("goal-name");
+    const goalDescription = document.getElementById("goal-description");
+    const goalDate = document.getElementById("goal-date");
+    const homeView = document.getElementById("home-view");
+    const detailView = document.getElementById("goal-detail-view");
+    let goals = [];
+    let goalsReadable = true;
+    let goalReturnButton = null;
+    try {
+      const raw = localStorage.getItem(goalStorageKey);
+      const saved = raw === null ? [] : JSON.parse(raw);
+      if (!Array.isArray(saved) || saved.some(goal => !goal ||
+          typeof goal.name !== "string" || typeof goal.description !== "string" ||
+          (goal.dueDate !== "" && !validDate(goal.dueDate)))) {
+        throw new Error("Invalid saved goals");
+      }
+      goals = saved;
+    } catch (error) {
+      goalsReadable = false;
+      goalStatus.textContent = "无法读取目标，已停止保存以保护原数据。 · Cannot load goals. Saving paused to protect existing data.";
+    }
+    function showGoalDetail(goal, returnButton) {
+      goalReturnButton = returnButton;
+      document.getElementById("goal-detail-title").textContent = goal.name;
+      document.getElementById("goal-detail-description").textContent = goal.description || "暂无描述 · No description yet.";
+      document.getElementById("goal-detail-date").textContent = "截止日期 · Due Date：" + (goal.dueDate || "未设置 · Not set");
+      homeView.hidden = true;
+      detailView.hidden = false;
+      document.getElementById("goal-detail-title").focus();
+    }
+    document.getElementById("goal-back").addEventListener("click", () => {
+      detailView.hidden = true;
+      homeView.hidden = false;
+      if (goalReturnButton) goalReturnButton.focus();
+    });
+    function renderGoals() {
+      goalList.replaceChildren();
+      document.getElementById("goals-empty").hidden = !goalsReadable || goals.length > 0;
+      goals.forEach(goal => {
+        const card = document.createElement("article");
+        card.className = "goal-card";
+        const title = document.createElement("h3");
+        title.textContent = goal.name;
+        const due = document.createElement("p");
+        due.className = "todo-hint";
+        due.textContent = "截止日期 · Due Date：" + (goal.dueDate || "未设置 · Not set");
+        const progressText = document.createElement("p");
+        progressText.className = "todo-hint";
+        progressText.textContent = "完成进度 · Progress：0%";
+        const progress = document.createElement("progress");
+        progress.max = 100;
+        progress.value = 0;
+        progress.setAttribute("aria-label", "目标完成进度 · Goal progress：" + goal.name);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "查看详情 · View Details";
+        button.setAttribute("aria-label", "查看详情 · View details：" + goal.name);
+        button.addEventListener("click", () => showGoalDetail(goal, button));
+        card.append(title, due, progressText, progress, button);
+        goalList.append(card);
+      });
+    }
+    document.getElementById("goal-form").addEventListener("submit", event => {
+      event.preventDefault();
+      if (!goalsReadable) {
+        goalStatus.textContent = "目标读取失败，未写入存储。 · Goals could not be loaded. No data was written.";
+        return;
+      }
+      const name = goalName.value.trim();
+      if (!name) {
+        goalStatus.textContent = "请输入目标名称。 · Please enter a goal name.";
+        goalName.focus();
+        return;
+      }
+      if (goalDate.value && !validDate(goalDate.value)) {
+        goalStatus.textContent = "请选择有效日期。 · Please choose a valid date.";
+        return;
+      }
+      const goal = { name, description: goalDescription.value.trim(), dueDate: goalDate.value };
+      const updatedGoals = [...goals, goal];
+      try {
+        localStorage.setItem(goalStorageKey, JSON.stringify(updatedGoals));
+      } catch (error) {
+        goalStatus.textContent = "保存失败，填写内容已保留，请重试。 · Save failed. Your draft is kept. Please retry.";
+        return;
+      }
+      goals = updatedGoals;
+      renderGoals();
+      goalName.value = "";
+      goalDescription.value = "";
+      goalDate.value = "";
+      goalStatus.textContent = "目标已创建并保存。 · Goal created and saved.";
+      goalName.focus();
+    });
+    renderGoals();
   </script>
 </body>
 </html>
