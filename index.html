@@ -116,7 +116,12 @@
     .goal-card button { width: 100%; margin-top: 18px; }
     .goal-detail h2, .goal-detail p { overflow-wrap: anywhere; }
     .goal-description { white-space: pre-wrap; }
-    .subtasks-placeholder { margin-top: 24px; padding: 20px; border: 1px dashed #c4b5fd; border-radius: 16px; background: #faf9ff; }
+    .subtasks-section { margin-top: 24px; padding: 20px; border: 1px solid #ede9fe; border-radius: 16px; background: #faf9ff; }
+    .subtask-form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+    .subtask-form .field { flex: 1 1 220px; }
+    .subtask-form button { flex: 1 1 140px; }
+    .subtask-item { flex-wrap: wrap; }
+    .subtask-item .todo-label { flex: 1 1 180px; }
     @media (max-width: 640px) {
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .todo-form, .filters { grid-template-columns: 1fr; }
@@ -217,7 +222,7 @@
         <button type="submit">创建目标 · Create Goal</button>
       </form>
       <p id="goal-status" class="todo-hint" role="status"></p>
-      <p class="todo-hint">第一阶段：进度暂为 0%，后续加入子任务后再计算。 · Phase 1: progress starts at 0%; subtasks will be added later.</p>
+      <p class="todo-hint">进度根据已完成子任务自动计算。 · Progress is calculated from completed subtasks.</p>
       <div id="goal-list" class="goal-grid"></div>
       <p id="goals-empty" class="todo-hint">还没有目标，创建你的第一个目标吧！ · No goals yet. Create your first goal!</p>
     </section>
@@ -233,11 +238,19 @@
       <p id="goal-detail-date"></p>
       <h3>目标描述 · Description</h3>
       <p id="goal-detail-description" class="goal-description"></p>
-      <p>完成进度 · Progress：0%</p>
-      <progress max="100" value="0" aria-label="目标完成进度 · Goal progress"></progress>
-      <section class="subtasks-placeholder" aria-labelledby="subtasks-title">
+      <p id="goal-detail-progress" aria-live="polite">完成进度 · Progress：0%</p>
+      <progress id="goal-detail-progress-bar" max="100" value="0" aria-label="目标完成进度 · Goal progress"></progress>
+      <section class="subtasks-section" aria-labelledby="subtasks-title">
         <h3 id="subtasks-title">子任务 · Subtasks</h3>
-        <p>此处预留子任务区域，后续版本开放。 · Subtasks will be available in a future update.</p>
+        <form id="subtask-form" class="subtask-form">
+          <label class="field" for="subtask-text">子任务名称 · Subtask Name
+            <input id="subtask-text" class="todo-input" type="text" maxlength="500" required placeholder="把目标拆成一小步 · Add a small step">
+          </label>
+          <button type="submit">添加子任务 · Add Subtask</button>
+        </form>
+        <p id="subtask-status" class="todo-hint" role="status"></p>
+        <ul id="subtask-list" class="todo-list" aria-label="子任务列表 · Subtask list"></ul>
+        <p id="subtasks-empty" class="todo-hint">还没有子任务，添加第一步吧！ · No subtasks yet. Add your first step!</p>
       </section>
     </section>
   </div>
@@ -580,32 +593,121 @@
     let goals = [];
     let goalsReadable = true;
     let goalReturnButton = null;
+    let selectedGoal = null;
+    const subtaskText = document.getElementById("subtask-text");
+    const subtaskList = document.getElementById("subtask-list");
+    const subtaskStatus = document.getElementById("subtask-status");
     try {
       const raw = localStorage.getItem(goalStorageKey);
       const saved = raw === null ? [] : JSON.parse(raw);
       if (!Array.isArray(saved) || saved.some(goal => !goal ||
           typeof goal.name !== "string" || typeof goal.description !== "string" ||
-          (goal.dueDate !== "" && !validDate(goal.dueDate)))) {
+          (goal.dueDate !== "" && !validDate(goal.dueDate)) ||
+          (goal.subtasks !== undefined && (!Array.isArray(goal.subtasks) ||
+            goal.subtasks.some(task => !task || typeof task.text !== "string" || typeof task.done !== "boolean"))))) {
         throw new Error("Invalid saved goals");
       }
-      goals = saved;
+      // Older goals have no subtasks. Supply an empty list without writing on load.
+      goals = saved.map(goal => ({ ...goal, subtasks: goal.subtasks === undefined ? [] : goal.subtasks }));
     } catch (error) {
       goalsReadable = false;
       goalStatus.textContent = "无法读取目标，已停止保存以保护原数据。 · Cannot load goals. Saving paused to protect existing data.";
     }
     function showGoalDetail(goal, returnButton) {
+      selectedGoal = goal;
       goalReturnButton = returnButton;
+      subtaskText.value = "";
+      subtaskStatus.textContent = "";
       document.getElementById("goal-detail-title").textContent = goal.name;
       document.getElementById("goal-detail-description").textContent = goal.description || "暂无描述 · No description yet.";
       document.getElementById("goal-detail-date").textContent = "截止日期 · Due Date：" + (goal.dueDate || "未设置 · Not set");
       homeView.hidden = true;
       detailView.hidden = false;
+      renderSubtasks();
       document.getElementById("goal-detail-title").focus();
     }
     document.getElementById("goal-back").addEventListener("click", () => {
       detailView.hidden = true;
       homeView.hidden = false;
       if (goalReturnButton) goalReturnButton.focus();
+      selectedGoal = null;
+    });
+    function goalProgress(goal) {
+      const total = goal.subtasks.length;
+      const completed = goal.subtasks.filter(task => task.done).length;
+      const percent = total ? Math.round(completed / total * 100) : 0;
+      return { percent, label: `完成进度 · Progress：${percent}%（${completed}/${total}）` };
+    }
+    function saveSubtasks(nextSubtasks) {
+      if (!selectedGoal || !goalsReadable) return false;
+      // Save a candidate first; a failed write leaves the displayed data intact.
+      const updatedGoals = goals.map(goal => goal === selectedGoal ? { ...goal, subtasks: nextSubtasks } : goal);
+      try {
+        localStorage.setItem(goalStorageKey, JSON.stringify(updatedGoals));
+      } catch (error) {
+        subtaskStatus.textContent = "保存失败，修改尚未生效，请重试。 · Save failed. No changes applied; please retry.";
+        return false;
+      }
+      selectedGoal.subtasks = nextSubtasks;
+      subtaskStatus.textContent = "子任务已保存。 · Subtasks saved.";
+      renderSubtasks();
+      renderGoals();
+      return true;
+    }
+    function renderSubtasks() {
+      if (!selectedGoal) return;
+      const progress = goalProgress(selectedGoal);
+      document.getElementById("goal-detail-progress").textContent = progress.label;
+      document.getElementById("goal-detail-progress-bar").value = progress.percent;
+      document.getElementById("subtasks-empty").hidden = selectedGoal.subtasks.length > 0;
+      subtaskList.replaceChildren();
+      selectedGoal.subtasks.forEach((task, index) => {
+        const item = document.createElement("li");
+        item.className = "todo-item subtask-item" + (task.done ? " done" : "");
+        const label = document.createElement("label");
+        label.className = "todo-label";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = task.done;
+        checkbox.setAttribute("data-subtask-index", index);
+        const text = document.createElement("span");
+        text.className = "todo-text";
+        text.textContent = task.text;
+        checkbox.addEventListener("change", () => {
+          const next = selectedGoal.subtasks.map((entry, position) => position === index ? { ...entry, done: checkbox.checked } : entry);
+          if (saveSubtasks(next)) {
+            subtaskList.querySelector(`[data-subtask-index="${index}"]`).focus();
+          } else {
+            checkbox.checked = task.done;
+          }
+        });
+        const deleteButton = document.createElement("button");
+        deleteButton.type = "button";
+        deleteButton.className = "delete-button";
+        deleteButton.textContent = "删除 · Delete";
+        deleteButton.setAttribute("aria-label", "删除子任务 · Delete subtask：" + task.text);
+        deleteButton.addEventListener("click", () => {
+          if (!window.confirm("确定删除这个子任务吗？ · Delete this subtask?\n" + task.text)) return;
+          if (saveSubtasks(selectedGoal.subtasks.filter((entry, position) => position !== index))) subtaskText.focus();
+        });
+        label.append(checkbox, text);
+        item.append(label, deleteButton);
+        subtaskList.append(item);
+      });
+    }
+    document.getElementById("subtask-form").addEventListener("submit", event => {
+      event.preventDefault();
+      if (!selectedGoal) return;
+      const text = subtaskText.value.trim();
+      if (!text) {
+        subtaskStatus.textContent = "请输入子任务名称。 · Please enter a subtask name.";
+        subtaskText.focus();
+        return;
+      }
+      if (saveSubtasks([...selectedGoal.subtasks, { text, done: false }])) {
+        subtaskText.value = "";
+        subtaskText.focus();
+      }
     });
     function renderGoals() {
       goalList.replaceChildren();
@@ -620,16 +722,18 @@
         due.textContent = "截止日期 · Due Date：" + (goal.dueDate || "未设置 · Not set");
         const progressText = document.createElement("p");
         progressText.className = "todo-hint";
-        progressText.textContent = "完成进度 · Progress：0%";
+        const completion = goalProgress(goal);
+        progressText.textContent = completion.label;
         const progress = document.createElement("progress");
         progress.max = 100;
-        progress.value = 0;
+        progress.value = completion.percent;
         progress.setAttribute("aria-label", "目标完成进度 · Goal progress：" + goal.name);
         const button = document.createElement("button");
         button.type = "button";
         button.textContent = "查看详情 · View Details";
         button.setAttribute("aria-label", "查看详情 · View details：" + goal.name);
         button.addEventListener("click", () => showGoalDetail(goal, button));
+        if (goal === selectedGoal) goalReturnButton = button;
         card.append(title, due, progressText, progress, button);
         goalList.append(card);
       });
@@ -650,7 +754,7 @@
         goalStatus.textContent = "请选择有效日期。 · Please choose a valid date.";
         return;
       }
-      const goal = { name, description: goalDescription.value.trim(), dueDate: goalDate.value };
+      const goal = { name, description: goalDescription.value.trim(), dueDate: goalDate.value, subtasks: [] };
       const updatedGoals = [...goals, goal];
       try {
         localStorage.setItem(goalStorageKey, JSON.stringify(updatedGoals));
