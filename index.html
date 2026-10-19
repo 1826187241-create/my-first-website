@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>个人工作管理 · My Workspace</title>
+  <title>工作仪表盘 · My Workspace Dashboard</title>
   <style>
     * { box-sizing: border-box; }
     body {
@@ -125,6 +125,22 @@
     .subtask-item .task-content { flex: 1 1 220px; }
     .subtask-item .task-actions { margin-left: 0; }
     .subtask-form .subtask-name-field { flex-basis: 100%; }
+    .dashboard { text-align: left; margin: 28px 0; }
+    .dashboard-header { text-align: left; }
+    .dashboard-header h1 { font-size: clamp(26px, 5vw, 36px); margin-bottom: 10px; }
+    .dashboard-nav { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+    .dashboard-nav a { color: #6d28d9; padding: 10px 14px; border-radius: 10px; background: #f5f3ff; text-decoration: none; }
+    .dashboard-panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 24px 0; }
+    .dashboard-panel { min-width: 0; padding: 18px; border: 1px solid #ede9fe; border-radius: 16px; background: #faf9ff; }
+    .dashboard-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+    .dashboard-task { display: block; width: 100%; min-width: 0; padding: 14px; background: white; color: #40344f; border: 1px solid #ede9fe; text-align: left; font: inherit; }
+    .dashboard-task:hover { background: #f5f3ff; }
+    .dashboard-task strong, .dashboard-task .dashboard-goal { display: block; overflow-wrap: anywhere; line-height: 1.7; }
+    .dashboard-goal { color: #736480; font-size: 13px; margin: 6px 0; }
+    .dashboard-task .task-meta { margin: 8px 0 0; }
+    .dashboard-task.is-overdue { border-left: 4px solid #c99350; }
+    .dashboard .stat { min-width: 0; }
+    .dashboard .stat span { display: block; overflow-wrap: anywhere; line-height: 1.6; }
     @media (max-width: 640px) {
       .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .todo-form, .filters { grid-template-columns: 1fr; }
@@ -137,6 +153,7 @@
       .today-section { padding: 16px; }
       .goal-grid { grid-template-columns: 1fr; }
       .goal-form, .goal-card { padding: 16px; }
+      .dashboard-panels { grid-template-columns: 1fr; }
     }
     @media (max-width: 480px) {
       .card { padding: 30px 20px; }
@@ -150,14 +167,46 @@
 <body>
   <div class="card">
     <div id="home-view">
-    <h1>✨ 个人工作管理</h1>
-    <p class="subtitle">My Workspace · 有条理地完成每一天</p>
-    <p>你好！欢迎来到我的网站。</p>
-    <p>这是我使用 ChatGPT 学习制作的第一个网页！</p>
-    <button onclick="sayHello()">点击认识我</button>
-    <p id="message" aria-live="polite"></p>
+    <header class="dashboard-header">
+      <h1>工作仪表盘 · Dashboard</h1>
+      <p class="subtitle">从目标出发，专注今天。 · Your goals, your focus, your day.</p>
+      <p class="todo-hint">本地日期 · Local Date：<time id="dashboard-date"></time></p>
+      <nav class="dashboard-nav" aria-label="首页导航 · Home navigation">
+        <a href="#dashboard-goals">目标进度 · Goal Progress</a>
+        <a href="#goals-title">创建目标 · Create Goal</a>
+        <a href="#todo-title">普通任务 · Standalone Tasks</a>
+      </nav>
+    </header>
+    <section class="dashboard" aria-labelledby="dashboard-title">
+      <h2 id="dashboard-title">工作概览 · Overview</h2>
+      <p class="todo-hint">以下任务统计仅包含目标内的子任务。 · Task counts cover goal subtasks only.</p>
+      <p id="dashboard-status" class="todo-hint" role="status"></p>
+      <div class="stats" aria-label="目标与子任务统计 · Goal and subtask statistics">
+        <div class="stat"><strong id="dashboard-total-goals">0</strong><span>全部目标 · Total Goals</span></div>
+        <div class="stat"><strong id="dashboard-today-count">0</strong><span>今日待办 · Today's Tasks</span></div>
+        <div class="stat"><strong id="dashboard-completed-count">0</strong><span>已完成任务 · Completed Tasks</span></div>
+        <div class="stat"><strong id="dashboard-overdue-count">0</strong><span>逾期任务 · Overdue Tasks</span></div>
+      </div>
+      <section id="dashboard-goals" aria-labelledby="dashboard-goals-title">
+        <h2 id="dashboard-goals-title">目标进度 · Goal Progress</h2>
+        <div id="goal-list" class="goal-grid"></div>
+        <p id="goals-empty" class="todo-hint">还没有目标，创建你的第一个目标吧！ · No goals yet. Create your first goal!</p>
+      </section>
+      <div class="dashboard-panels">
+        <section class="dashboard-panel" aria-labelledby="dashboard-today-title">
+          <h2 id="dashboard-today-title">今日任务 · Today's Tasks</h2>
+          <ul id="dashboard-today-list" class="dashboard-list"></ul>
+          <p id="dashboard-today-empty" class="todo-hint">今天没有到期的未完成子任务。 · No pending subtasks due today.</p>
+        </section>
+        <section class="dashboard-panel" aria-labelledby="dashboard-focus-title">
+          <h2 id="dashboard-focus-title">优先事项 · Priority Focus</h2>
+          <ul id="dashboard-focus-list" class="dashboard-list"></ul>
+          <p id="dashboard-focus-empty" class="todo-hint">没有未完成的高优先级子任务。 · No pending high-priority subtasks.</p>
+        </section>
+      </div>
+    </section>
     <section class="today-section" aria-labelledby="today-title">
-      <h2 id="today-title">今日任务 · Today’s Tasks</h2>
+      <h2 id="today-title">普通任务提醒 · Standalone Task Reminders</h2>
       <p class="todo-hint">今天 · Today：<time id="today-date"></time></p>
       <p id="today-count" class="todo-hint" aria-live="polite" tabindex="-1"></p>
       <p class="todo-hint">今天到期和已逾期的未完成任务，按优先级排列。 · Pending tasks due today or overdue, ordered by priority.</p>
@@ -211,7 +260,7 @@
       <p class="todo-hint">事项自动保存在当前浏览器中，下次打开还能继续使用。</p>
     </section>
     <section class="goals-section" aria-labelledby="goals-title">
-      <h2 id="goals-title">我的目标 · My Goals</h2>
+      <h2 id="goals-title">创建目标 · Create Goal</h2>
       <form id="goal-form" class="goal-form">
         <label class="field" for="goal-name">目标名称 · Goal Name
           <input id="goal-name" class="todo-input" type="text" maxlength="200" required placeholder="你想实现什么？ · What do you want to achieve?">
@@ -226,12 +275,12 @@
       </form>
       <p id="goal-status" class="todo-hint" role="status"></p>
       <p class="todo-hint">进度根据已完成子任务自动计算。 · Progress is calculated from completed subtasks.</p>
-      <div id="goal-list" class="goal-grid"></div>
-      <p id="goals-empty" class="todo-hint">还没有目标，创建你的第一个目标吧！ · No goals yet. Create your first goal!</p>
     </section>
     <section class="about" aria-labelledby="about-title">
-      <h2 id="about-title">关于我</h2>
+      <h2 id="about-title">关于我 · About Me</h2>
       <p>你好！我正在学习使用ai制作网站，希望未来能独立开发属于自己的ai应用</p>
+      <button onclick="sayHello()">点击认识我 · Say Hello</button>
+      <p id="message" aria-live="polite"></p>
     </section>
     </div>
     <section id="goal-detail-view" class="goal-detail" aria-labelledby="goal-detail-title" hidden>
@@ -661,13 +710,13 @@
       const saved = raw === null ? [] : JSON.parse(raw);
       if (!Array.isArray(saved) || saved.some(goal => !goal ||
           typeof goal.name !== "string" || typeof goal.description !== "string" ||
-          (goal.dueDate !== "" && !validDate(goal.dueDate)) ||
+          (goal.dueDate !== undefined && goal.dueDate !== "" && !validDate(goal.dueDate)) ||
           (goal.subtasks !== undefined && (!Array.isArray(goal.subtasks) ||
             goal.subtasks.some(task => !validSubtask(task)))))) {
         throw new Error("Invalid saved goals");
       }
       // Older goals have no subtasks. Supply an empty list without writing on load.
-      goals = saved.map(goal => ({ ...goal, subtasks: (goal.subtasks || []).map(task => ({
+      goals = saved.map(goal => ({ ...goal, dueDate: goal.dueDate === undefined ? "" : goal.dueDate, subtasks: (goal.subtasks || []).map(task => ({
         ...task, priority: task.priority === undefined ? "medium" : task.priority,
         dueDate: task.dueDate === undefined ? "" : task.dueDate
       })) }));
@@ -697,7 +746,10 @@
     document.getElementById("goal-back").addEventListener("click", () => {
       detailView.hidden = true;
       homeView.hidden = false;
-      if (goalReturnButton) goalReturnButton.focus();
+      renderDashboard();
+      const returnButton = goalReturnButton && goalReturnButton.isConnected ? goalReturnButton :
+        goalList.children[goals.indexOf(selectedGoal)]?.querySelector("button");
+      if (returnButton) returnButton.focus();
       selectedGoal = null;
     });
     function goalProgress(goal) {
@@ -867,6 +919,71 @@
         subtaskText.focus();
       }
     });
+    function dashboardData(today) {
+      // Read existing objects; sort only a temporary display array, never stored tasks.
+      const entries = goals.flatMap((goal, goalIndex) => goal.subtasks.map((task, taskIndex) => ({ goal, task, goalIndex, taskIndex })));
+      const pending = entries.filter(({ task }) => !task.done);
+      const todayTasks = pending.filter(({ task }) => task.dueDate === today);
+      const overdueTasks = pending.filter(({ task }) => task.dueDate && task.dueDate < today);
+      const focusTasks = pending.filter(({ task }) => task.priority === "high").sort((a, b) => {
+        const aOverdue = Boolean(a.task.dueDate && a.task.dueDate < today);
+        const bOverdue = Boolean(b.task.dueDate && b.task.dueDate < today);
+        if (aOverdue !== bOverdue) return aOverdue ? -1 : 1;
+        const aDate = a.task.dueDate;
+        const bDate = b.task.dueDate;
+        if (!aDate && bDate) return 1;
+        if (aDate && !bDate) return -1;
+        if (aDate !== bDate) return aDate < bDate ? -1 : 1;
+        return a.goalIndex - b.goalIndex || a.taskIndex - b.taskIndex;
+      });
+      return { totalGoals: goals.length, completed: entries.length - pending.length, todayTasks, overdueTasks, focusTasks };
+    }
+    function renderDashboardTasks(listId, emptyId, entries, today) {
+      const list = document.getElementById(listId);
+      list.replaceChildren();
+      document.getElementById(emptyId).hidden = !goalsReadable || entries.length > 0;
+      entries.forEach(({ goal, task }) => {
+        const overdue = task.dueDate && task.dueDate < today;
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "dashboard-task" + (overdue ? " is-overdue" : "");
+        const title = document.createElement("strong");
+        title.textContent = task.text;
+        const goalLabel = document.createElement("span");
+        goalLabel.className = "dashboard-goal";
+        goalLabel.textContent = "所属目标 · Goal：" + goal.name;
+        const meta = document.createElement("span");
+        meta.className = "task-meta";
+        const priority = document.createElement("span");
+        priority.className = "badge priority-" + task.priority;
+        priority.textContent = "优先级 Priority：" + priorityNames[task.priority];
+        const due = document.createElement("span");
+        due.className = "badge" + (overdue ? " overdue" : "");
+        due.textContent = task.dueDate ? "截止 Due：" + task.dueDate + (overdue ? " · 已逾期 Overdue" : "") : "无截止日期 · No Due Date";
+        meta.append(priority, due);
+        button.append(title, goalLabel, meta);
+        button.addEventListener("click", () => showGoalDetail(goal, button));
+        item.append(button);
+        list.append(item);
+      });
+    }
+    let dashboardDate = "";
+    function renderDashboard() {
+      const today = localDateKey();
+      dashboardDate = today;
+      const dateLabel = document.getElementById("dashboard-date");
+      dateLabel.textContent = today;
+      dateLabel.setAttribute("datetime", today);
+      const data = dashboardData(today);
+      document.getElementById("dashboard-total-goals").textContent = data.totalGoals;
+      document.getElementById("dashboard-today-count").textContent = data.todayTasks.length;
+      document.getElementById("dashboard-completed-count").textContent = data.completed;
+      document.getElementById("dashboard-overdue-count").textContent = data.overdueTasks.length;
+      document.getElementById("dashboard-status").textContent = goalsReadable ? "" : "目标数据读取失败，当前统计不可用；原数据未改动。 · Goals could not be read. Statistics unavailable; stored data is unchanged.";
+      renderDashboardTasks("dashboard-today-list", "dashboard-today-empty", data.todayTasks, today);
+      renderDashboardTasks("dashboard-focus-list", "dashboard-focus-empty", data.focusTasks, today);
+    }
     function renderGoals() {
       goalList.replaceChildren();
       document.getElementById("goals-empty").hidden = !goalsReadable || goals.length > 0;
@@ -895,6 +1012,7 @@
         card.append(title, due, progressText, progress, button);
         goalList.append(card);
       });
+      renderDashboard();
     }
     document.getElementById("goal-form").addEventListener("submit", event => {
       event.preventDefault();
@@ -929,6 +1047,17 @@
       goalName.focus();
     });
     renderGoals();
+    function refreshDashboardDate() {
+      if (localDateKey() !== dashboardDate) {
+        renderDashboard();
+        if (selectedGoal) renderSubtasks();
+      }
+    }
+    setInterval(refreshDashboardDate, 30000);
+    window.addEventListener("focus", refreshDashboardDate);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) refreshDashboardDate();
+    });
   </script>
 </body>
 </html>
