@@ -36,7 +36,7 @@ async function main() {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${server.address().port}`;
   browser = await chromium.launch({ headless: true, channel: 'msedge' });
-  async function setup(goals, viewport = { width: 1280, height: 900 }) {
+  async function setup(goals, viewport = { width: 1280, height: 900 }, tasks = [{ text: '独立普通任务', done: false, dueDate: today, priority: 'high' }]) {
     const context = await browser.newContext({ timezoneId: 'Asia/Shanghai', viewport });
     contexts.push(context);
     await context.addInitScript(() => {
@@ -52,10 +52,10 @@ async function main() {
     // UTC is still October 18; the device's local date is October 19.
     await page.clock.install({ time: new Date('2026-10-18T16:15:00Z') });
     await page.goto(url);
-    await page.evaluate(({ goals, goalKey, taskKey, today }) => {
+    await page.evaluate(({ goals, goalKey, taskKey, tasks }) => {
       localStorage.setItem(goalKey, JSON.stringify(goals));
-      localStorage.setItem(taskKey, JSON.stringify([{ text: '独立普通任务', done: false, dueDate: today, priority: 'high' }]));
-    }, { goals, goalKey, taskKey, today });
+      localStorage.setItem(taskKey, JSON.stringify(tasks));
+    }, { goals, goalKey, taskKey, tasks });
     await page.reload();
     return page;
   }
@@ -182,8 +182,56 @@ async function main() {
   await midnight.clock.setSystemTime(new Date('2026-10-19T16:01:00Z'));
   await midnight.evaluate(() => refreshDashboardDate());
   assert.equal(await midnight.locator('#dashboard-date').textContent(), '2026-10-20');
-  assert.deepEqual(await counts(midnight), ['3', '1', '2', '4']);
+  assert.deepEqual(await counts(midnight), ['3', '1', '2', '5']);
   assert.deepEqual(await midnight.evaluate(() => window.storageWrites), []);
+  // Overdue alone includes both sources. All other dashboard metrics stay goal-only.
+  const standalone = [
+    { text:'独立逾期', done:false, dueDate:'2026-10-18' },
+    { text:'独立已完成逾期', done:true, dueDate:'2026-10-17' },
+    { text:'独立今天', done:false, dueDate:today },
+    { text:'独立未来', done:false, dueDate:'2026-10-20' },
+    { text:'独立旧无日期', done:false, extra:'keep' },
+    { text:'独立空日期', done:false, dueDate:'' }
+  ];
+  const mixed = await setup(fixtures, { width:390, height:844 }, standalone);
+  assert.deepEqual(await counts(mixed), ['3', '2', '2', '3']);
+  assert.equal(await mixed.evaluate(key => localStorage.getItem(key), taskKey), JSON.stringify(standalone));
+  assert.equal(await mixed.evaluate(key => localStorage.getItem(key), goalKey), JSON.stringify(fixtures));
+  assert.deepEqual(await mixed.evaluate(() => window.storageWrites), []);
+  const progressBefore = await mixed.locator('#goal-list progress').evaluateAll(nodes => nodes.map(n => n.value));
+  await mixed.locator('#todo-list input[type=checkbox]').first().check();
+  assert.deepEqual(await counts(mixed), ['3', '2', '2', '2']);
+  await mixed.locator('#todo-list input[type=checkbox]').first().uncheck();
+  assert.deepEqual(await counts(mixed), ['3', '2', '2', '3']);
+  await mixed.locator('#todo-list .edit-button').first().click();
+  await mixed.locator('#edit-date').fill(today);
+  await mixed.locator('#edit-form button[type=submit]').click();
+  assert.deepEqual(await counts(mixed), ['3', '2', '2', '2']);
+  await mixed.locator('#todo-input').fill('新增独立逾期');
+  await mixed.locator('#task-date').fill('2026-10-18');
+  await mixed.locator('#todo-form button[type=submit]').click();
+  assert.deepEqual(await counts(mixed), ['3', '2', '2', '3']);
+  await mixed.reload();
+  assert.deepEqual(await counts(mixed), ['3', '2', '2', '3']);
+  await mixed.locator('#todo-list .delete-button').last().click();
+  assert.deepEqual(await counts(mixed), ['3', '2', '2', '2']);
+  assert.deepEqual(await mixed.locator('#goal-list progress').evaluateAll(nodes => nodes.map(n => n.value)), progressBefore);
+  assert.equal(await mixed.evaluate(key => localStorage.getItem(key), goalKey), JSON.stringify(fixtures));
+  const standaloneOnly = await setup([], { width:320, height:900 }, standalone);
+  assert.deepEqual(await counts(standaloneOnly), ['0', '0', '0', '1']);
+  await checkLayout(standaloneOnly, 320);
+  const goalsOnly = await setup(fixtures, { width:1280, height:900 }, []);
+  assert.deepEqual(await counts(goalsOnly), ['3', '2', '2', '2']);
+  // Identical names in separate records remain distinct; missing old fields are safe.
+  const legacyOverdue = [{ name:'旧目标', description:'', subtasks:[
+    { text:'同名任务', done:false, dueDate:'2026-10-18' },
+    { text:'已完成旧子任务', done:true, dueDate:'2026-10-18' },
+    { text:'旧无日期子任务', done:false }
+  ] }];
+  const legacyMixed = await setup(legacyOverdue, { width:1280, height:900 }, [{text:'同名任务',done:false,dueDate:'2026-10-18'}]);
+  assert.deepEqual(await counts(legacyMixed), ['1', '0', '1', '2']);
+  assert.deepEqual(await legacyMixed.evaluate(() => window.storageWrites), []);
+  assert.equal(await legacyMixed.evaluate(key => localStorage.getItem(key), goalKey), JSON.stringify(legacyOverdue));
   assert.deepEqual(errors, []);
   console.log('PASS: Edge browser; empty/legacy/cross-goal statistics; priority/date rules; detail navigation; completion/edit/delete confirmation; filters; refresh persistence; storage isolation/order/no-write-on-read; original task controls; local timezone/midnight; 320/390/768/1280px layouts and long text.');
 }

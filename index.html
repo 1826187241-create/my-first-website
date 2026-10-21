@@ -179,7 +179,7 @@
     </header>
     <section class="dashboard" aria-labelledby="dashboard-title">
       <h2 id="dashboard-title">工作概览 · Overview</h2>
-      <p class="todo-hint">以下任务统计仅包含目标内的子任务。 · Task counts cover goal subtasks only.</p>
+      <p class="todo-hint">逾期数量包含目标子任务和普通独立任务；其余统计范围不变。 · Overdue counts include goal subtasks and standalone tasks; other statistics are unchanged.</p>
       <p id="dashboard-status" class="todo-hint" role="status"></p>
       <div class="stats" aria-label="目标与子任务统计 · Goal and subtask statistics">
         <div class="stat"><strong id="dashboard-total-goals">0</strong><span>全部目标 · Total Goals</span></div>
@@ -626,6 +626,7 @@
       const emptyState = document.getElementById("empty-state");
       emptyState.hidden = visibleCount > 0;
       emptyState.textContent = todos.length ? "当前筛选下没有任务，试试其他分类或状态。" : "清单还是空的，添加你的第一件待办吧！";
+      document.dispatchEvent(new Event("standalone-tasks-rendered"));
     }
     document.getElementById("todo-form").addEventListener("submit", event => {
       event.preventDefault();
@@ -925,6 +926,7 @@
       const pending = entries.filter(({ task }) => !task.done);
       const todayTasks = pending.filter(({ task }) => task.dueDate === today);
       const overdueTasks = pending.filter(({ task }) => task.dueDate && task.dueDate < today);
+      const standaloneOverdueCount = todos.filter(task => !task.done && task.dueDate && task.dueDate < today).length;
       const focusTasks = pending.filter(({ task }) => task.priority === "high").sort((a, b) => {
         const aOverdue = Boolean(a.task.dueDate && a.task.dueDate < today);
         const bOverdue = Boolean(b.task.dueDate && b.task.dueDate < today);
@@ -936,7 +938,7 @@
         if (aDate !== bDate) return aDate < bDate ? -1 : 1;
         return a.goalIndex - b.goalIndex || a.taskIndex - b.taskIndex;
       });
-      return { totalGoals: goals.length, completed: entries.length - pending.length, todayTasks, overdueTasks, focusTasks };
+      return { totalGoals: goals.length, completed: entries.length - pending.length, todayTasks, overdueCount: overdueTasks.length + standaloneOverdueCount, focusTasks };
     }
     function renderDashboardTasks(listId, emptyId, entries, today) {
       const list = document.getElementById(listId);
@@ -979,7 +981,7 @@
       document.getElementById("dashboard-total-goals").textContent = data.totalGoals;
       document.getElementById("dashboard-today-count").textContent = data.todayTasks.length;
       document.getElementById("dashboard-completed-count").textContent = data.completed;
-      document.getElementById("dashboard-overdue-count").textContent = data.overdueTasks.length;
+      document.getElementById("dashboard-overdue-count").textContent = data.overdueCount;
       document.getElementById("dashboard-status").textContent = goalsReadable ? "" : "目标数据读取失败，当前统计不可用；原数据未改动。 · Goals could not be read. Statistics unavailable; stored data is unchanged.";
       renderDashboardTasks("dashboard-today-list", "dashboard-today-empty", data.todayTasks, today);
       renderDashboardTasks("dashboard-focus-list", "dashboard-focus-empty", data.focusTasks, today);
@@ -1047,6 +1049,10 @@
       goalName.focus();
     });
     renderGoals();
+    // Standalone task changes refresh only the overdue card, not other statistics.
+    document.addEventListener("standalone-tasks-rendered", () => {
+      document.getElementById("dashboard-overdue-count").textContent = dashboardData(localDateKey()).overdueCount;
+    });
     function refreshDashboardDate() {
       if (localDateKey() !== dashboardDate) {
         renderDashboard();
